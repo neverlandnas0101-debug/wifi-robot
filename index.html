@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>奇幻島 雲端智能機器人 (多車低延遲版)</title>
+    <title>奇幻島 雲端智能機器人 (大型群控版)</title>
     <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
     <style>
         * { box-sizing: border-box; user-select: none; -webkit-user-select: none; }
@@ -16,8 +16,12 @@
         .bt-card { background: white; max-width: 480px; margin: 5px auto 15px auto; padding: 12px; border-radius: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.06); }
         #status { font-size: 15px; color: #d9534f; font-weight: bold; }
 
-        .car-selector-container { background: #e3f2fd; padding: 12px; border-radius: 10px; margin-top: 10px; border: 2px solid #90caf9; }
-        .car-selector-container select { font-size: 16px; padding: 8px 15px; border-radius: 8px; border: 1px solid #64b5f6; font-weight: bold; color: #1565c0; outline: none; margin-left: 10px;}
+        /* 🌟 升級的車號輸入框樣式 */
+        .car-selector-container { background: #e3f2fd; padding: 12px; border-radius: 10px; margin-top: 10px; border: 2px solid #90caf9; display: flex; justify-content: center; align-items: center; gap: 10px;}
+        .car-selector-container input { font-size: 18px; padding: 8px; width: 120px; border-radius: 8px; border: 2px solid #64b5f6; font-weight: bold; color: #1565c0; text-align: center; outline: none; transition: all 0.2s; }
+        .car-selector-container input:focus { border-color: #1976d2; box-shadow: 0 0 8px rgba(25,118,210,0.3); }
+        .car-selector-container button { padding: 10px 15px; font-size: 16px; font-weight: bold; background: #1976d2; color: white; border: none; border-radius: 8px; cursor: pointer; transition: background 0.2s;}
+        .car-selector-container button:active { background: #1565c0; transform: scale(0.95); }
 
         .group-title { font-size: 15px; font-weight: bold; color: #555; margin-bottom: 8px; display: block; }
 
@@ -56,15 +60,12 @@
 
     <div class="bt-card">
         <div id="status">☁️ 正在連線至 MQTT 雲端...</div>
+        
+        <!-- 🌟 將下拉選單改為「自動補零輸入框」 -->
         <div class="car-selector-container">
-            <label style="font-weight: bold; color: #1565c0;">📍 控制目標：</label>
-            <select id="carIdSelect" onchange="changeCarId()">
-                <option value="01">01 號車</option>
-                <option value="02">02 號車</option>
-                <option value="03">03 號車</option>
-                <option value="04">04 號車</option>
-                <option value="05">05 號車</option>
-            </select>
+            <label style="font-weight: bold; color: #1565c0;">📍 車號：</label>
+            <input type="number" id="carIdInput" placeholder="1~200" min="1" max="999">
+            <button onclick="changeCarId()">連線</button>
         </div>
     </div>
 
@@ -114,7 +115,33 @@
         const MQTT_BROKER = "wss://broker.emqx.io:8084/mqtt";
         const CLIENT_ID = 'web_' + Math.random().toString(16).substr(2, 8);
         
-        let currentCarId = "01";
+        let currentCarId = "001";
+        
+        // 🌟 1. QR Code 參數解析與記憶邏輯
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlId = urlParams.get('id'); // 檢查網址有沒有 ?id=xxx
+        
+        if (urlId) {
+            // 如果網址有自帶號碼，強制補足3位數 (例如 5 變成 005)
+            currentCarId = urlId.toString().padStart(3, '0');
+            localStorage.setItem('savedCarId', currentCarId); // 存入大腦
+            
+            // 清除網址參數讓畫面乾淨 (可選)
+            window.history.replaceState(null, null, window.location.pathname);
+        } else {
+            // 如果網址沒有自帶號碼，檢查大腦有沒有記住上次的號碼
+            const savedId = localStorage.getItem('savedCarId');
+            if (savedId) {
+                currentCarId = savedId;
+            }
+        }
+
+        // 頁面載入時，把號碼填入輸入框
+        document.addEventListener("DOMContentLoaded", () => {
+            document.getElementById('carIdInput').value = parseInt(currentCarId, 10);
+        });
+
+        // 🌟 2. 動態設定頻道
         let TOPIC_CMD = `fantasy/robot${currentCarId}/cmd`;
         let TOPIC_RADAR = `fantasy/robot${currentCarId}/radar`;
         
@@ -124,7 +151,7 @@
         let audioUnlocked = false;
 
         client.on('connect', function () {
-            document.getElementById('status').innerText = '狀態：🟢 雲端連線成功！可以開始遙控';
+            document.getElementById('status').innerText = `狀態：🟢 已連線至 ${currentCarId} 號車！`;
             document.getElementById('status').style.color = '#198754';
             client.subscribe(TOPIC_RADAR);
         });
@@ -143,14 +170,28 @@
             }
         });
 
+        // 🌟 3. 手動更改車號的執行邏輯
         function changeCarId() {
+            let inputVal = document.getElementById('carIdInput').value;
+            if (!inputVal) return;
+
+            // 把使用者輸入的數字強制變成 3 位數字串
+            currentCarId = inputVal.toString().padStart(3, '0');
+            
+            // 存入瀏覽器記憶
+            localStorage.setItem('savedCarId', currentCarId);
+
             client.unsubscribe(TOPIC_RADAR);
-            currentCarId = document.getElementById('carIdSelect').value;
             TOPIC_CMD = `fantasy/robot${currentCarId}/cmd`;
             TOPIC_RADAR = `fantasy/robot${currentCarId}/radar`;
             client.subscribe(TOPIC_RADAR);
+            
             obstacleMemory = {};
-            document.getElementById('radarDist').innerText = `✅ 已成功切換至 ${currentCarId} 號車連線`;
+            document.getElementById('status').innerText = `狀態：🟢 已連線至 ${currentCarId} 號車！`;
+            document.getElementById('radarDist').innerText = `✅ 已成功切換至 ${currentCarId} 號車`;
+            
+            // 將輸入框的格式修正為沒補零的數字
+            document.getElementById('carIdInput').value = parseInt(currentCarId, 10);
             sendCmd('S');
         }
 
@@ -200,9 +241,6 @@
             }
         }
 
-        // ==========================================
-        // 🌟 核心升級：電競級即時語音辨識
-        // ==========================================
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         let recognition = null;
         let isListening = false;
@@ -211,12 +249,9 @@
             recognition = new SpeechRecognition();
             recognition.lang = 'zh-TW';
             recognition.continuous = true; 
-            
-            // 🌟 關鍵 1：開啟「即時回傳 (interimResults)」，不等一句話講完就先丟字出來！
             recognition.interimResults = true; 
 
             recognition.onresult = (event) => {
-                // 取得從剛才到現在的所有最新字串
                 let text = "";
                 for (let i = event.resultIndex; i < event.results.length; ++i) {
                     text += event.results[i][0].transcript;
@@ -248,15 +283,12 @@
                     if (!isAutoMode) toggleAutoMode(); commandMatched = true;
                 }
 
-                // 🌟 關鍵 2：只要命中指令，就「立刻把麥克風停止並瞬間重啟」！
-                // 這樣能強制清空舊字串，避免連續觸發，且下次講話依舊是零延遲。
                 if (commandMatched) {
                     recognition.stop();
                 }
             };
 
             recognition.onend = () => {
-                // 只要開關還是亮著的，就無限瞬間重啟，達到無縫接軌
                 if(isListening) recognition.start(); 
             };
         }
