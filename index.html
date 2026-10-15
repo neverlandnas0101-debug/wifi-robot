@@ -3,8 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>奇幻島 雲端智能機器人 (多車版)</title>
-    <!-- 引入 MQTT.js 函式庫 -->
+    <title>奇幻島 雲端智能機器人 (多車低延遲版)</title>
     <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
     <style>
         * { box-sizing: border-box; user-select: none; -webkit-user-select: none; }
@@ -17,7 +16,6 @@
         .bt-card { background: white; max-width: 480px; margin: 5px auto 15px auto; padding: 12px; border-radius: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.06); }
         #status { font-size: 15px; color: #d9534f; font-weight: bold; }
 
-        /* 車號選擇器樣式 */
         .car-selector-container { background: #e3f2fd; padding: 12px; border-radius: 10px; margin-top: 10px; border: 2px solid #90caf9; }
         .car-selector-container select { font-size: 16px; padding: 8px 15px; border-radius: 8px; border: 1px solid #64b5f6; font-weight: bold; color: #1565c0; outline: none; margin-left: 10px;}
 
@@ -58,12 +56,9 @@
 
     <div class="bt-card">
         <div id="status">☁️ 正在連線至 MQTT 雲端...</div>
-        
-        <!-- 🌟 加入車號切換器 -->
         <div class="car-selector-container">
             <label style="font-weight: bold; color: #1565c0;">📍 控制目標：</label>
             <select id="carIdSelect" onchange="changeCarId()">
-                <!-- 您可以在這裡新增 01 到 20 號 -->
                 <option value="01">01 號車</option>
                 <option value="02">02 號車</option>
                 <option value="03">03 號車</option>
@@ -93,7 +88,7 @@
         </div>
 
         <div class="voice-container">
-            <span class="group-title">【 原生連續語音遙控 】</span>
+            <span class="group-title">【 ⚡極低延遲連續語音遙控 】</span>
             <button id="btnMic" class="btn-mic" onclick="toggleVoice()">🎤 點擊開始語音控制</button>
             <div id="voiceResult">等待語音指令...</div>
         </div>
@@ -116,13 +111,9 @@
     </div>
 
     <script>
-        // ==========================================
-        // MQTT 連線與頻道設定 (動態切換)
-        // ==========================================
         const MQTT_BROKER = "wss://broker.emqx.io:8084/mqtt";
         const CLIENT_ID = 'web_' + Math.random().toString(16).substr(2, 8);
         
-        // 預設為 01 號車
         let currentCarId = "01";
         let TOPIC_CMD = `fantasy/robot${currentCarId}/cmd`;
         let TOPIC_RADAR = `fantasy/robot${currentCarId}/radar`;
@@ -139,7 +130,6 @@
         });
 
         client.on('message', function (topic, message) {
-            // 只接收目前選定車號的雷達資料
             if (topic === TOPIC_RADAR) {
                 let dataStr = message.toString();
                 if(dataStr.startsWith("R:")) {
@@ -153,26 +143,14 @@
             }
         });
 
-        // 🌟 車號切換函數：當下拉選單改變時觸發
         function changeCarId() {
-            // 先退訂舊頻道的雷達資料
             client.unsubscribe(TOPIC_RADAR);
-            
-            // 取得新選擇的號碼
             currentCarId = document.getElementById('carIdSelect').value;
-            
-            // 更新頻道名稱
             TOPIC_CMD = `fantasy/robot${currentCarId}/cmd`;
             TOPIC_RADAR = `fantasy/robot${currentCarId}/radar`;
-            
-            // 訂閱新頻道的雷達資料
             client.subscribe(TOPIC_RADAR);
-            
-            // 清空舊的雷達繪圖記憶
             obstacleMemory = {};
             document.getElementById('radarDist').innerText = `✅ 已成功切換至 ${currentCarId} 號車連線`;
-            
-            // 發出煞車指令，確保安全交接
             sendCmd('S');
         }
 
@@ -183,7 +161,6 @@
                 document.getElementById('autoBtn').classList.remove('active');
                 document.getElementById('autoBtn').innerText = '🤖 切換自動避障 (關閉)';
             }
-            // 把指令發送到目前的車號頻道
             client.publish(TOPIC_CMD, cmd);
         }
 
@@ -205,9 +182,6 @@
             sendCmd('V' + level);
         }
 
-        // ==========================================
-        // 語音與雷達繪圖功能
-        // ==========================================
         function unlockAudio() {
             if (!audioUnlocked && 'speechSynthesis' in window) {
                 window.speechSynthesis.speak(new SpeechSynthesisUtterance(""));
@@ -226,6 +200,9 @@
             }
         }
 
+        // ==========================================
+        // 🌟 核心升級：電競級即時語音辨識
+        // ==========================================
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         let recognition = null;
         let isListening = false;
@@ -234,36 +211,53 @@
             recognition = new SpeechRecognition();
             recognition.lang = 'zh-TW';
             recognition.continuous = true; 
-            recognition.interimResults = false;
+            
+            // 🌟 關鍵 1：開啟「即時回傳 (interimResults)」，不等一句話講完就先丟字出來！
+            recognition.interimResults = true; 
 
             recognition.onresult = (event) => {
-                const text = event.results[event.results.length - 1][0].transcript.trim();
-                document.getElementById('voiceResult').innerText = "聽到指令：" + text;
+                // 取得從剛才到現在的所有最新字串
+                let text = "";
+                for (let i = event.resultIndex; i < event.results.length; ++i) {
+                    text += event.results[i][0].transcript;
+                }
+                text = text.trim();
+                if (!text) return;
+
+                document.getElementById('voiceResult').innerText = "⚡即時攔截：" + text;
+                let commandMatched = false;
 
                 if (text.includes("前進") || text.includes("往前") || text.includes("走")) {
-                    sendCmd('F'); speakOut("衝啊！");
+                    sendCmd('F'); speakOut("衝啊！"); commandMatched = true;
                 }
                 else if (text.includes("後退") || text.includes("倒車")) {
-                    sendCmd('B'); speakOut("巴庫巴庫");
+                    sendCmd('B'); speakOut("巴庫巴庫"); commandMatched = true;
                 }
                 else if (text.includes("左轉")) {
-                    sendCmd('L'); speakOut("向左轉");
+                    sendCmd('L'); speakOut("向左轉"); commandMatched = true;
                     setTimeout(() => { sendCmd(lastContinuousCmd); }, 500);
                 }
                 else if (text.includes("右轉")) {
-                    sendCmd('R'); speakOut("向右轉");
+                    sendCmd('R'); speakOut("向右轉"); commandMatched = true;
                     setTimeout(() => { sendCmd(lastContinuousCmd); }, 500);
                 }
                 else if (text.includes("停") || text.includes("煞車")) {
-                    sendCmd('S'); speakOut("緊急煞車");
+                    sendCmd('S'); speakOut("緊急煞車"); commandMatched = true;
                 }
                 else if (text.includes("避障") || text.includes("自動")) {
-                    if (!isAutoMode) toggleAutoMode();
+                    if (!isAutoMode) toggleAutoMode(); commandMatched = true;
+                }
+
+                // 🌟 關鍵 2：只要命中指令，就「立刻把麥克風停止並瞬間重啟」！
+                // 這樣能強制清空舊字串，避免連續觸發，且下次講話依舊是零延遲。
+                if (commandMatched) {
+                    recognition.stop();
                 }
             };
 
             recognition.onend = () => {
-                if(isListening) recognition.start(); // 確保連續聆聽不中斷
+                // 只要開關還是亮著的，就無限瞬間重啟，達到無縫接軌
+                if(isListening) recognition.start(); 
             };
         }
 
@@ -275,8 +269,8 @@
                 recognition.start();
                 isListening = true;
                 btn.classList.add('recording');
-                btn.innerText = "🎙️ 聆聽中... (請直接說話)";
-                speakOut("語音已啟動");
+                btn.innerText = "🎙️ ⚡極低延遲聆聽中...";
+                speakOut("即時語音已啟動");
             } else {
                 isListening = false;
                 recognition.stop();
@@ -313,7 +307,6 @@
                     activeWarnings.push(`${parseInt(ang) === 90 ? "前方" : (parseInt(ang) === 150 ? "左方" : "右方")}${b.dist}cm`);
                 }
             }
-            // 只有在沒有剛切換頻道時才更新文字
             if (!document.getElementById('radarDist').innerText.includes("已成功切換")) {
                 document.getElementById('radarDist').innerText = activeWarnings.length > 0 ? "⚠️ 障礙: " + activeWarnings.join(" | ") : "✅ 周圍安全 (掃描中...)";
                 document.getElementById('radarDist').style.color = activeWarnings.length > 0 ? '#ff4d4d' : '#00ff00';
