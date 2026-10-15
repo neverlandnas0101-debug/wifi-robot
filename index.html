@@ -3,47 +3,37 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>奇幻島 雲端智能機器人 (大型群控版)</title>
+    <title>奇幻島 雲端智能機器人 (極速防卡版)</title>
     <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
     <style>
         * { box-sizing: border-box; user-select: none; -webkit-user-select: none; }
         body { text-align: center; font-family: -apple-system, sans-serif; background-color: #f4f6f9; margin: 0; padding: 10px; }
-        
         .title-container { display: flex; flex-direction: column; align-items: center; gap: 8px; margin: 10px 0; }
         .title-container img { width: 100px; height: 100px; object-fit: cover; border-radius: 50%; border: 3px solid #007bff; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
         h2 { color: #333; margin: 0; font-size: 22px; }
-        
         .bt-card { background: white; max-width: 480px; margin: 5px auto 15px auto; padding: 12px; border-radius: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.06); }
         #status { font-size: 15px; color: #d9534f; font-weight: bold; }
-
-        /* 🌟 升級的車號輸入框樣式 */
         .car-selector-container { background: #e3f2fd; padding: 12px; border-radius: 10px; margin-top: 10px; border: 2px solid #90caf9; display: flex; justify-content: center; align-items: center; gap: 10px;}
         .car-selector-container input { font-size: 18px; padding: 8px; width: 120px; border-radius: 8px; border: 2px solid #64b5f6; font-weight: bold; color: #1565c0; text-align: center; outline: none; transition: all 0.2s; }
         .car-selector-container input:focus { border-color: #1976d2; box-shadow: 0 0 8px rgba(25,118,210,0.3); }
         .car-selector-container button { padding: 10px 15px; font-size: 16px; font-weight: bold; background: #1976d2; color: white; border: none; border-radius: 8px; cursor: pointer; transition: background 0.2s;}
         .car-selector-container button:active { background: #1565c0; transform: scale(0.95); }
-
         .group-title { font-size: 15px; font-weight: bold; color: #555; margin-bottom: 8px; display: block; }
-
         .speed-container, .voice-container { background: white; border-radius: 12px; padding: 12px; margin-bottom: 15px; box-shadow: 0 2px 6px rgba(0,0,0,0.06); max-width: 480px; margin-left: auto; margin-right: auto;}
         .speed-btn-group { display: flex; justify-content: center; gap: 15px; }
         .speed-btn { flex: 1; font-size: 18px; font-weight: bold; padding: 12px; background-color: #e9ecef; color: #495057; border: 2px solid #ced4da; border-radius: 10px; cursor: pointer; transition: all 0.2s; }
         .speed-btn.active { background-color: #007bff; color: white; border-color: #0056b3; }
-
         .radar-container { background: #051a05; border-radius: 12px; padding: 15px 10px; margin-bottom: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.2); color: #00ff00; max-width: 480px; margin-left: auto; margin-right: auto;}
         .radar-container .group-title { color: #00ff00; }
         #radarCanvas { background-color: transparent; display: block; margin: 0 auto; filter: drop-shadow(0 0 5px rgba(0,255,0,0.3)); }
         #radarDist { margin-top: 10px; font-size: 14px; font-weight: bold;}
-
         .mode-container { margin-bottom: 15px; width: 100%; max-width: 480px; margin-left: auto; margin-right: auto;}
         .btn-auto { font-size: 18px; font-weight: bold; padding: 12px; width: 100%; background-color: #ffc107; color: #333; border: 2px solid #e0a800; border-radius: 15px; cursor: pointer; }
         .btn-auto.active { background-color: #28a745; color: white; border-color: #1e7e34; }
-
         .btn-mic { font-size: 18px; font-weight: bold; padding: 15px; width: 100%; background-color: #e91e63; color: white; border: 2px solid #c2185b; border-radius: 15px; cursor: pointer; transition: all 0.2s ease; }
         .btn-mic.recording { background-color: #ff1744; border-color: #d50000; animation: pulse 1.2s infinite; }
         @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.02); } 100% { transform: scale(1); } }
         #voiceResult { margin-top: 8px; font-size: 15px; font-weight: bold; color: #007bff; }
-
         .joystick-container { display: flex; justify-content: space-between; align-items: center; width: 100%; max-width: 480px; margin-left: auto; margin-right: auto; padding: 0 5px; }
         .stick-group { display: flex; flex-direction: column; gap: 12px; align-items: center; }
         .stick-row { display: flex; gap: 10px; }
@@ -60,8 +50,6 @@
 
     <div class="bt-card">
         <div id="status">☁️ 正在連線至 MQTT 雲端...</div>
-        
-        <!-- 🌟 將下拉選單改為「自動補零輸入框」 -->
         <div class="car-selector-container">
             <label style="font-weight: bold; color: #1565c0;">📍 車號：</label>
             <input type="number" id="carIdInput" placeholder="1~200" min="1" max="999">
@@ -116,38 +104,31 @@
         const CLIENT_ID = 'web_' + Math.random().toString(16).substr(2, 8);
         
         let currentCarId = "001";
-        
-        // 🌟 1. QR Code 參數解析與記憶邏輯
         const urlParams = new URLSearchParams(window.location.search);
-        const urlId = urlParams.get('id'); // 檢查網址有沒有 ?id=xxx
-        
+        const urlId = urlParams.get('id');
         if (urlId) {
-            // 如果網址有自帶號碼，強制補足3位數 (例如 5 變成 005)
             currentCarId = urlId.toString().padStart(3, '0');
-            localStorage.setItem('savedCarId', currentCarId); // 存入大腦
-            
-            // 清除網址參數讓畫面乾淨 (可選)
+            localStorage.setItem('savedCarId', currentCarId);
             window.history.replaceState(null, null, window.location.pathname);
         } else {
-            // 如果網址沒有自帶號碼，檢查大腦有沒有記住上次的號碼
             const savedId = localStorage.getItem('savedCarId');
-            if (savedId) {
-                currentCarId = savedId;
-            }
+            if (savedId) currentCarId = savedId;
         }
 
-        // 頁面載入時，把號碼填入輸入框
         document.addEventListener("DOMContentLoaded", () => {
             document.getElementById('carIdInput').value = parseInt(currentCarId, 10);
         });
 
-        // 🌟 2. 動態設定頻道
         let TOPIC_CMD = `fantasy/robot${currentCarId}/cmd`;
         let TOPIC_RADAR = `fantasy/robot${currentCarId}/radar`;
         
         let client = mqtt.connect(MQTT_BROKER, { clientId: CLIENT_ID });
         let isAutoMode = true;
+        
+        // 🌟 防塞車與防轉圈圈的變數
         let lastContinuousCmd = 'S';
+        let lastSentCmd = '';  
+        let turnTimeout = null; 
         let audioUnlocked = false;
 
         client.on('connect', function () {
@@ -170,15 +151,10 @@
             }
         });
 
-        // 🌟 3. 手動更改車號的執行邏輯
         function changeCarId() {
             let inputVal = document.getElementById('carIdInput').value;
             if (!inputVal) return;
-
-            // 把使用者輸入的數字強制變成 3 位數字串
             currentCarId = inputVal.toString().padStart(3, '0');
-            
-            // 存入瀏覽器記憶
             localStorage.setItem('savedCarId', currentCarId);
 
             client.unsubscribe(TOPIC_RADAR);
@@ -189,13 +165,17 @@
             obstacleMemory = {};
             document.getElementById('status').innerText = `狀態：🟢 已連線至 ${currentCarId} 號車！`;
             document.getElementById('radarDist').innerText = `✅ 已成功切換至 ${currentCarId} 號車`;
-            
-            // 將輸入框的格式修正為沒補零的數字
             document.getElementById('carIdInput').value = parseInt(currentCarId, 10);
+            
+            lastSentCmd = ''; // 切換車號重置
             sendCmd('S');
         }
 
         function sendCmd(cmd) {
+            // 🌟 防連發機制：如果跟上一個指令一樣，直接忽略，避免塞爆雲端
+            if (cmd === lastSentCmd) return;
+            lastSentCmd = cmd;
+
             if (cmd === 'F' || cmd === 'B' || cmd === 'S') lastContinuousCmd = cmd;
             if (cmd !== 'A' && isAutoMode) {
                 isAutoMode = false;
@@ -220,6 +200,7 @@
         function setSpeed(level) {
             document.querySelectorAll('.speed-btn').forEach(b => b.classList.remove('active'));
             document.getElementById('speed' + level).classList.add('active');
+            lastSentCmd = ''; // 切換速度強制重置
             sendCmd('V' + level);
         }
 
@@ -270,14 +251,19 @@
                 }
                 else if (text.includes("左轉")) {
                     sendCmd('L'); speakOut("向左轉"); commandMatched = true;
-                    setTimeout(() => { sendCmd(lastContinuousCmd); }, 500);
+                    // 🌟 解決轉圈圈：清除舊的計時器，避免多重指令打架
+                    if(turnTimeout) clearTimeout(turnTimeout);
+                    turnTimeout = setTimeout(() => { lastSentCmd = ''; sendCmd(lastContinuousCmd); }, 500);
                 }
                 else if (text.includes("右轉")) {
                     sendCmd('R'); speakOut("向右轉"); commandMatched = true;
-                    setTimeout(() => { sendCmd(lastContinuousCmd); }, 500);
+                    // 🌟 解決轉圈圈：清除舊的計時器
+                    if(turnTimeout) clearTimeout(turnTimeout);
+                    turnTimeout = setTimeout(() => { lastSentCmd = ''; sendCmd(lastContinuousCmd); }, 500);
                 }
                 else if (text.includes("停") || text.includes("煞車")) {
                     sendCmd('S'); speakOut("緊急煞車"); commandMatched = true;
+                    if(turnTimeout) clearTimeout(turnTimeout);
                 }
                 else if (text.includes("避障") || text.includes("自動")) {
                     if (!isAutoMode) toggleAutoMode(); commandMatched = true;
