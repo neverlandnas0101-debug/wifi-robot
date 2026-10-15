@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>奇幻島 雲端智能機器人 (WiFi版)</title>
+    <title>奇幻島 雲端智能機器人 (多車版)</title>
     <!-- 引入 MQTT.js 函式庫 -->
     <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
     <style>
@@ -16,6 +16,10 @@
         
         .bt-card { background: white; max-width: 480px; margin: 5px auto 15px auto; padding: 12px; border-radius: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.06); }
         #status { font-size: 15px; color: #d9534f; font-weight: bold; }
+
+        /* 車號選擇器樣式 */
+        .car-selector-container { background: #e3f2fd; padding: 12px; border-radius: 10px; margin-top: 10px; border: 2px solid #90caf9; }
+        .car-selector-container select { font-size: 16px; padding: 8px 15px; border-radius: 8px; border: 1px solid #64b5f6; font-weight: bold; color: #1565c0; outline: none; margin-left: 10px;}
 
         .group-title { font-size: 15px; font-weight: bold; color: #555; margin-bottom: 8px; display: block; }
 
@@ -54,6 +58,19 @@
 
     <div class="bt-card">
         <div id="status">☁️ 正在連線至 MQTT 雲端...</div>
+        
+        <!-- 🌟 加入車號切換器 -->
+        <div class="car-selector-container">
+            <label style="font-weight: bold; color: #1565c0;">📍 控制目標：</label>
+            <select id="carIdSelect" onchange="changeCarId()">
+                <!-- 您可以在這裡新增 01 到 20 號 -->
+                <option value="01">01 號車</option>
+                <option value="02">02 號車</option>
+                <option value="03">03 號車</option>
+                <option value="04">04 號車</option>
+                <option value="05">05 號車</option>
+            </select>
+        </div>
     </div>
 
     <div id="controls">
@@ -100,12 +117,15 @@
 
     <script>
         // ==========================================
-        // MQTT 連線設定
+        // MQTT 連線與頻道設定 (動態切換)
         // ==========================================
         const MQTT_BROKER = "wss://broker.emqx.io:8084/mqtt";
         const CLIENT_ID = 'web_' + Math.random().toString(16).substr(2, 8);
-        const TOPIC_CMD = "fantasy/robot01/cmd";
-        const TOPIC_RADAR = "fantasy/robot01/radar";
+        
+        // 預設為 01 號車
+        let currentCarId = "01";
+        let TOPIC_CMD = `fantasy/robot${currentCarId}/cmd`;
+        let TOPIC_RADAR = `fantasy/robot${currentCarId}/radar`;
         
         let client = mqtt.connect(MQTT_BROKER, { clientId: CLIENT_ID });
         let isAutoMode = true;
@@ -119,6 +139,7 @@
         });
 
         client.on('message', function (topic, message) {
+            // 只接收目前選定車號的雷達資料
             if (topic === TOPIC_RADAR) {
                 let dataStr = message.toString();
                 if(dataStr.startsWith("R:")) {
@@ -132,6 +153,29 @@
             }
         });
 
+        // 🌟 車號切換函數：當下拉選單改變時觸發
+        function changeCarId() {
+            // 先退訂舊頻道的雷達資料
+            client.unsubscribe(TOPIC_RADAR);
+            
+            // 取得新選擇的號碼
+            currentCarId = document.getElementById('carIdSelect').value;
+            
+            // 更新頻道名稱
+            TOPIC_CMD = `fantasy/robot${currentCarId}/cmd`;
+            TOPIC_RADAR = `fantasy/robot${currentCarId}/radar`;
+            
+            // 訂閱新頻道的雷達資料
+            client.subscribe(TOPIC_RADAR);
+            
+            // 清空舊的雷達繪圖記憶
+            obstacleMemory = {};
+            document.getElementById('radarDist').innerText = `✅ 已成功切換至 ${currentCarId} 號車連線`;
+            
+            // 發出煞車指令，確保安全交接
+            sendCmd('S');
+        }
+
         function sendCmd(cmd) {
             if (cmd === 'F' || cmd === 'B' || cmd === 'S') lastContinuousCmd = cmd;
             if (cmd !== 'A' && isAutoMode) {
@@ -139,6 +183,7 @@
                 document.getElementById('autoBtn').classList.remove('active');
                 document.getElementById('autoBtn').innerText = '🤖 切換自動避障 (關閉)';
             }
+            // 把指令發送到目前的車號頻道
             client.publish(TOPIC_CMD, cmd);
         }
 
@@ -241,7 +286,6 @@
             }
         }
 
-        // 雷達繪圖 (省略細節保持流暢)
         const canvas = document.getElementById('radarCanvas');
         const ctx = canvas.getContext('2d');
         const radarRadius = 130; const centerX = canvas.width / 2; const centerY = canvas.height - 10;
@@ -269,8 +313,11 @@
                     activeWarnings.push(`${parseInt(ang) === 90 ? "前方" : (parseInt(ang) === 150 ? "左方" : "右方")}${b.dist}cm`);
                 }
             }
-            document.getElementById('radarDist').innerText = activeWarnings.length > 0 ? "⚠️ 障礙: " + activeWarnings.join(" | ") : "✅ 周圍安全 (掃描中...)";
-            document.getElementById('radarDist').style.color = activeWarnings.length > 0 ? '#ff4d4d' : '#00ff00';
+            // 只有在沒有剛切換頻道時才更新文字
+            if (!document.getElementById('radarDist').innerText.includes("已成功切換")) {
+                document.getElementById('radarDist').innerText = activeWarnings.length > 0 ? "⚠️ 障礙: " + activeWarnings.join(" | ") : "✅ 周圍安全 (掃描中...)";
+                document.getElementById('radarDist').style.color = activeWarnings.length > 0 ? '#ff4d4d' : '#00ff00';
+            }
             requestAnimationFrame(renderRadarLoop);
         }
         renderRadarLoop();
